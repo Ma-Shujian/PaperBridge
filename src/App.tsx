@@ -13,8 +13,9 @@ import {
 import { useCallback, useMemo, useRef, useState } from "react";
 import { PdfDocumentViewer } from "./components/PdfDocumentViewer";
 import { readPdfDocument, readTextDocument } from "./lib/pdf";
+import { getMathAwarePdfSelectionText } from "./lib/pdfSelection";
 import { translateSelection } from "./lib/translation";
-import type { LoadedDocument, TranslationProvider, TranslationState } from "./types";
+import type { LoadedDocument, TranslationMode, TranslationProvider, TranslationState } from "./types";
 
 const sampleDocument: LoadedDocument = {
   name: "Sample: compactness and convergence",
@@ -30,6 +31,11 @@ const providerLabels: Record<TranslationProvider, string> = {
   public: "公共翻译",
   custom: "自定义端点",
   local: "本地术语",
+};
+
+const modeLabels: Record<TranslationMode, string> = {
+  general: "普通翻译",
+  math: "数学文献",
 };
 
 const splitParagraphs = (pageText: string) => {
@@ -67,6 +73,9 @@ function App() {
   const [translation, setTranslation] = useState<TranslationState | null>(null);
   const [history, setHistory] = useState<TranslationState[]>([]);
   const [provider, setProvider] = useState<TranslationProvider>("public");
+  const [translationMode, setTranslationMode] = useState<TranslationMode>(() => {
+    return localStorage.getItem("paperbridge-translation-mode") === "general" ? "general" : "math";
+  });
   const [customEndpoint, setCustomEndpoint] = useState(() => {
     return (
       localStorage.getItem("paperbridge-custom-endpoint") ??
@@ -123,6 +132,7 @@ function App() {
         const result = await translateSelection(normalized, {
           provider,
           customEndpoint,
+          mode: translationMode,
         });
 
         if (requestIdRef.current !== requestId) {
@@ -133,6 +143,7 @@ function App() {
           source: normalized,
           translated: result.translated,
           provider: result.provider,
+          mode: translationMode,
           at: Date.now(),
         };
 
@@ -153,7 +164,7 @@ function App() {
         }
       }
     },
-    [customEndpoint, provider],
+    [customEndpoint, provider, translationMode],
   );
 
   const handleSelection = useCallback(() => {
@@ -169,8 +180,13 @@ function App() {
       return;
     }
 
-    void runTranslation(selection.toString());
-  }, [runTranslation]);
+    const selectedText =
+      translationMode === "math"
+        ? getMathAwarePdfSelectionText(selection, range, container)
+        : selection.toString();
+
+    void runTranslation(selectedText);
+  }, [runTranslation, translationMode]);
 
   const handleFile = async (file: File) => {
     setIsLoadingDocument(true);
@@ -222,6 +238,12 @@ function App() {
   const updateCustomEndpoint = (value: string) => {
     setCustomEndpoint(value);
     localStorage.setItem("paperbridge-custom-endpoint", value);
+  };
+
+  const updateTranslationMode = (enabled: boolean) => {
+    const nextMode: TranslationMode = enabled ? "math" : "general";
+    setTranslationMode(nextMode);
+    localStorage.setItem("paperbridge-translation-mode", nextMode);
   };
 
   const copyTranslation = async () => {
@@ -301,8 +323,16 @@ function App() {
               disabled={provider !== "custom"}
             />
           </label>
+          <label className="mode-toggle">
+            <input
+              type="checkbox"
+              checked={translationMode === "math"}
+              onChange={(event) => updateTranslationMode(event.target.checked)}
+            />
+            <span>数学文献模式</span>
+          </label>
           <p className="privacy-note">
-            公共翻译会把选中文本发送到 MyMemory；自定义端点使用 POST JSON：text、sourceLanguage、targetLanguage。
+            数学文献模式会保留公式、变量、希腊字母、上下标和 Theorem/Lemma/Definition/Proof 编号；自定义端点会收到 mode、mathMode、instructions 和 glossary 字段。
           </p>
         </section>
       )}
@@ -364,7 +394,7 @@ function App() {
             </div>
             <div className="document-meta">
               <PanelRight size={16} />
-              {providerLabels[translation?.provider ?? provider]}
+              {modeLabels[translation?.mode ?? translationMode]} · {providerLabels[translation?.provider ?? provider]}
             </div>
           </div>
 

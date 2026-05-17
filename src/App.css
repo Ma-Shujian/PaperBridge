@@ -230,6 +230,22 @@ button {
   background: #f3f5f4;
 }
 
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: #26362f;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.mode-toggle input {
+  width: 17px;
+  height: 17px;
+  accent-color: #1f7a68;
+}
+
 .privacy-note {
   grid-column: 1 / -1;
   margin: 0;

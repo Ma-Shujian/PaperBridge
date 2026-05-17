@@ -55,7 +55,20 @@ const extractOutputText = (payload) => {
   return parts.join("\n").trim();
 };
 
-const translateWithOpenAI = async (text) => {
+const mathInstructions = [
+  "You are a precise academic translator.",
+  "Translate English mathematical literature into Simplified Chinese.",
+  "Return only the translation. Do not explain, summarize, expand proof steps, or add extra sections.",
+  "Preserve formulas, variables, Greek letters, subscripts, superscripts, citations, and equation references exactly.",
+  "Preserve labels such as Theorem 2.1, Lemma 3, Definition 1.4, Proposition, Corollary, and Proof with their numbering.",
+  "Do not translate or rewrite symbols such as X_t, \\mathcal{F}_t, \\epsilon, alpha, beta, mu, sigma, or expressions in TeX delimiters.",
+  "Use standard Simplified Chinese mathematical terminology consistently.",
+].join(" ");
+
+const generalInstructions =
+  "You are a precise academic translator. Translate English academic text into Simplified Chinese. Return only the translation.";
+
+const translateWithOpenAI = async (text, mathMode) => {
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -64,8 +77,7 @@ const translateWithOpenAI = async (text) => {
     },
     body: JSON.stringify({
       model,
-      instructions:
-        "You are a precise academic translator. Translate English mathematical literature into Simplified Chinese. Preserve formulas, symbols, theorem labels, citations, and variable names. Return only the translation.",
+      instructions: mathMode ? mathInstructions : generalInstructions,
       input: text,
     }),
   });
@@ -106,13 +118,14 @@ const server = http.createServer(async (request, response) => {
     const body = await readRequestBody(request);
     const payload = JSON.parse(body || "{}");
     const text = String(payload.text ?? "").trim();
+    const mathMode = payload.mathMode !== false && payload.mode !== "general";
 
     if (!text) {
       sendJson(response, 400, { error: "Missing text." });
       return;
     }
 
-    const translation = await translateWithOpenAI(text);
+    const translation = await translateWithOpenAI(text, mathMode);
     sendJson(response, 200, { translation });
   } catch (error) {
     sendJson(response, 500, {
