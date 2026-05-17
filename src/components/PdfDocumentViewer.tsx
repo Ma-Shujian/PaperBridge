@@ -1,5 +1,5 @@
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FocusEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask, TextLayer } from "pdfjs-dist";
 import "pdfjs-dist/web/pdf_viewer.css";
 import { pdfjsLib } from "../lib/pdf";
@@ -305,6 +305,15 @@ export function PdfDocumentViewer({ data, onPageCountChange }: PdfDocumentViewer
     jumpToPage(pageInputRef.current?.value ?? pageInput);
   };
 
+  const handlePageInputBlur = (event: FocusEvent<HTMLInputElement>) => {
+    const nextFocus = event.relatedTarget;
+    if (nextFocus instanceof HTMLElement && nextFocus.closest(".pdf-jump-control")) {
+      return;
+    }
+
+    setPageInput(String(currentPage));
+  };
+
   if (loadError) {
     return (
       <div className="pdf-load-error">
@@ -346,7 +355,7 @@ export function PdfDocumentViewer({ data, onPageCountChange }: PdfDocumentViewer
             type="number"
             value={pageInput}
             onChange={(event) => setPageInput(event.target.value)}
-            onBlur={() => setPageInput(String(currentPage))}
+            onBlur={handlePageInputBlur}
           />
         </label>
         <span className="page-total">/ {pageCount}</span>
