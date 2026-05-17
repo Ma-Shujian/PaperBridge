@@ -14,11 +14,16 @@ type PdfPageViewProps = {
   pdf: PDFDocumentProxy;
 };
 
+type PdfPagePlaceholderProps = {
+  pageNumber: number;
+};
+
 const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
 const pdfAssetBase = `${import.meta.env.BASE_URL.replace(/\/?$/, "/")}pdfjs/`;
+const prerenderRadius = 2;
 
 function PdfPageView({ pdf, pageNumber }: PdfPageViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -155,21 +160,37 @@ function PdfPageView({ pdf, pageNumber }: PdfPageViewProps) {
   );
 }
 
+function PdfPagePlaceholder({ pageNumber }: PdfPagePlaceholderProps) {
+  return (
+    <div className="pdf-page-outer">
+      <div className="pdf-page-label">Page {pageNumber}</div>
+      <div className="pdf-page-placeholder" aria-label={`PDF page ${pageNumber} placeholder`} />
+    </div>
+  );
+}
+
 export function PdfDocumentViewer({ data, onPageCountChange }: PdfDocumentViewerProps) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
+  const [visiblePages, setVisiblePages] = useState<number[]>([1]);
   const [loadError, setLoadError] = useState("");
   const pageInputRef = useRef<HTMLInputElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
+  const visiblePagesRef = useRef(new Set<number>([1]));
 
   useEffect(() => {
     let cancelled = false;
     setPdf(null);
     setPageCount(0);
+    setCurrentPage(1);
+    setPageInput("1");
+    setVisiblePages([1]);
     setLoadError("");
+    pageRefs.current.clear();
+    visiblePagesRef.current = new Set([1]);
 
     const loadingTask = pdfjsLib.getDocument({
       data: data.slice(0),
@@ -211,6 +232,82 @@ export function PdfDocumentViewer({ data, onPageCountChange }: PdfDocumentViewer
   const pageNumbers = useMemo(() => {
     return Array.from({ length: pageCount }, (_, index) => index + 1);
   }, [pageCount]);
+
+  const renderedPageNumbers = useMemo(() => {
+    const nextPages = new Set<number>();
+
+    const addPageWindow = (pageNumber: number) => {
+      for (let offset = -prerenderRadius; offset <= prerenderRadius; offset += 1) {
+        const nextPage = pageNumber + offset;
+        if (nextPage >= 1 && nextPage <= pageCount) {
+          nextPages.add(nextPage);
+        }
+      }
+    };
+
+    addPageWindow(currentPage);
+    visiblePages.forEach(addPageWindow);
+
+    return nextPages;
+  }, [currentPage, pageCount, visiblePages]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const scrollRoot = viewer?.closest(".document-view");
+
+    if (!viewer || !(scrollRoot instanceof HTMLElement) || pageNumbers.length === 0) {
+      return;
+    }
+
+    visiblePagesRef.current = new Set([1]);
+    setVisiblePages([1]);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let changed = false;
+        const nextVisiblePages = new Set(visiblePagesRef.current);
+
+        for (const entry of entries) {
+          const rawPageNumber = (entry.target as HTMLElement).dataset.pageNumber;
+          const pageNumber = rawPageNumber ? Number.parseInt(rawPageNumber, 10) : Number.NaN;
+
+          if (!Number.isFinite(pageNumber)) {
+            continue;
+          }
+
+          if (entry.isIntersecting) {
+            if (!nextVisiblePages.has(pageNumber)) {
+              nextVisiblePages.add(pageNumber);
+              changed = true;
+            }
+          } else if (nextVisiblePages.delete(pageNumber)) {
+            changed = true;
+          }
+        }
+
+        if (!changed) {
+          return;
+        }
+
+        visiblePagesRef.current = nextVisiblePages;
+        setVisiblePages(Array.from(nextVisiblePages).sort((a, b) => a - b));
+      },
+      {
+        root: scrollRoot,
+        rootMargin: "900px 0px",
+        threshold: 0.01,
+      },
+    );
+
+    for (const pageNumber of pageNumbers) {
+      const pageElement = pageRefs.current.get(pageNumber);
+      if (pageElement) {
+        observer.observe(pageElement);
+      }
+    }
+
+    return () => observer.disconnect();
+  }, [pageNumbers]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -376,6 +473,7 @@ export function PdfDocumentViewer({ data, onPageCountChange }: PdfDocumentViewer
       {pageNumbers.map((pageNumber) => (
         <div
           className="pdf-page-anchor"
+          data-page-number={pageNumber}
           key={pageNumber}
           ref={(element) => {
             if (element) {
@@ -385,7 +483,11 @@ export function PdfDocumentViewer({ data, onPageCountChange }: PdfDocumentViewer
             }
           }}
         >
-          <PdfPageView pdf={pdf} pageNumber={pageNumber} />
+          {renderedPageNumbers.has(pageNumber) ? (
+            <PdfPageView pdf={pdf} pageNumber={pageNumber} />
+          ) : (
+            <PdfPagePlaceholder pageNumber={pageNumber} />
+          )}
         </div>
       ))}
     </div>

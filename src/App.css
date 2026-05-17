@@ -455,6 +455,17 @@ button {
   box-shadow: 0 10px 26px rgba(33, 46, 40, 0.16);
 }
 
+.pdf-page-placeholder {
+  width: min(100%, 940px);
+  min-width: min(100%, 320px);
+  aspect-ratio: 210 / 297;
+  border: 1px solid #d7e0db;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(245, 248, 246, 0.94)),
+    #ffffff;
+  box-shadow: 0 8px 18px rgba(33, 46, 40, 0.08);
+}
+
 .pdf-page canvas {
   display: block;
 }
