@@ -1,8 +1,9 @@
 import * as pdfjsLib from "pdfjs-dist";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import type { LoadedDocument } from "../types";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+const pdfAssetBase = `${import.meta.env.BASE_URL.replace(/\/?$/, "/")}pdfjs/`;
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${pdfAssetBase}pdf.worker.min.mjs`;
 
 export { pdfjsLib };
 
